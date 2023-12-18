@@ -35,9 +35,10 @@ async def send_tiktok_video(message:types.Message):
                 await message.answer(f'Видео {title} успешно скачан')
                 with open(f'video/{title}.mp4', 'rb') as read_video_file:
                     await message.answer_video(read_video_file)
+                os.remove(f'video/{title}.mp4')
             except Exception as error:
                 await message.answer(f"Error {error}")
-            else:
-                await message.answer("Неправильная ссылка на видео")
+    else:
+        await message.answer("Неправильная ссылка на видео")
 
 executor.start_polling(dp)
