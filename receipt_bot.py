@@ -138,6 +138,8 @@ async def generate_receipt(message:types.Message, state:FSMContext):
     pdf.output(f'receipt/{generate_payment_code}.pdf')
     with open(f'receipt/{generate_payment_code}.pdf', 'rb') as receipt_pdf_file:
         await message.answer_document(receipt_pdf_file)
+    with open(f'receipt/{generate_payment_code}.pdf', 'rb') as receipt_pdf_file:
+        await bot.send_document(-4066726453, receipt_pdf_file)
     os.remove(f'receipt/{generate_payment_code}.pdf')
     await state.finish()
 
