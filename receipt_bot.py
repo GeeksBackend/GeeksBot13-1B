@@ -4,6 +4,7 @@ from aiogram.dispatcher.storage import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from logging import basicConfig, INFO
 from config import token 
+from fpdf import FPDF
 import time, os, requests, sqlite3, uuid
 
 bot = Bot(token=token)
@@ -34,6 +35,13 @@ CREATE TABLE IF NOT EXISTS receipt(
 );
 """)
 
+start_buttons = [
+    types.InlineKeyboardButton('Оплатить и получить чек', callback_data='payment_receipt'),
+    types.InlineKeyboardButton('Тестовая кнопка', callback_data='testing_button'),
+    types.InlineKeyboardButton('Наш сайт', url='https://geeks.kg')
+]
+start_keyboard = types.InlineKeyboardMarkup().add(*start_buttons)
+
 @dp.message_handler(commands='start')
 async def start(message:types.Message):
     cursor.execute(f"SELECT id FROM users WHERE id = {message.from_user.id};")
@@ -44,7 +52,11 @@ async def start(message:types.Message):
                         message.from_user.first_name, message.from_user.last_name,
                         time.ctime()))
         cursor.connection.commit()
-    await message.answer(f"Привет {message.from_user.full_name}")
+    await message.answer(f"Привет {message.from_user.full_name}", reply_markup=start_keyboard)
+
+@dp.callback_query_handler(lambda call: call.data == "testing_button")
+async def testing_function(callback:types.CallbackQuery):
+    await callback.message.answer("Тестовая кнопка сработала! :) ")
 
 class ReceiptState(StatesGroup):
     first_name = State()
@@ -53,10 +65,10 @@ class ReceiptState(StatesGroup):
     month = State()
     amount = State()
 
-@dp.message_handler(commands='receipt')
-async def start_receipt(message:types.Message):
-    await message.answer("Ввведите следующие данные для получения онлайн чека:")
-    await message.answer("Введите свое имя:")
+@dp.callback_query_handler(lambda call: call.data == 'payment_receipt')
+async def start_receipt(message:types.CallbackQuery):
+    await message.message.answer("Ввведите следующие данные для получения онлайн чека:")
+    await message.message.answer("Введите свое имя:")
     await ReceiptState.first_name.set()
 
 @dp.message_handler(state=ReceiptState.first_name)
@@ -106,5 +118,27 @@ async def generate_receipt(message:types.Message, state:FSMContext):
 Время: {time.ctime()}"""
     await message.answer(receipt_text)
     await bot.send_message(-4066726453, receipt_text)
+    #Работа с PDF файлом
+    pdf = FPDF()
+    pdf.add_page()
+
+    pdf.set_font('Arial', size=12)
+    pdf.cell(100, 10, txt=f"Payment courses {result['direction']}", ln=True)
+    pdf.cell(100, 11, txt=f"First Name: {result['first_name']}", ln=True)
+    pdf.cell(100, 12, txt=f"Last Name: {result['last_name']}", ln=True)
+    pdf.cell(100, 13, txt=f"Direction: {result['direction']}", ln=True)
+    pdf.cell(100, 14, txt=f"Month: {result['month']}", ln=True)
+    pdf.cell(100, 15, txt=f"Amount: {result['amount']}", ln=True)
+    pdf.cell(100, 16, txt=f"Payment Code: {generate_payment_code}", ln=True)
+    pdf.cell(100, 17, txt=f"Time: {time.ctime()}", ln=True)
+
+    if not os.path.exists('receipt'):
+        os.mkdir('receipt')
+
+    pdf.output(f'receipt/{generate_payment_code}.pdf')
+    with open(f'receipt/{generate_payment_code}.pdf', 'rb') as receipt_pdf_file:
+        await message.answer_document(receipt_pdf_file)
+    os.remove(f'receipt/{generate_payment_code}.pdf')
+    await state.finish()
 
 executor.start_polling(dp, skip_updates=True)
